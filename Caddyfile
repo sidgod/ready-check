@@ -1,0 +1,7 @@
+# Caddy reverse proxy configuration for self-hosted deployments.
+# Replace the domain below with your own.
+# Caddy auto-provisions and renews TLS certificates via Let's Encrypt.
+
+readycheck.example.com {
+    reverse_proxy localhost:3000
+}

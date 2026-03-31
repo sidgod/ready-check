@@ -1,0 +1,92 @@
+name: Build and Deploy ready-check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: 'us-east-1'
+  IMAGE_NAME: 'ghcr.io/${{ github.repository }}'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm test
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build and push Docker image to GHCR
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      # AWS OIDC authentication
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Deploy to Lightsail Container Service
+      - name: Deploy to Lightsail
+        run: |
+          aws lightsail create-container-service-deployment \
+            --service-name ready-check \
+            --containers "{
+              \"ready-check\": {
+                \"image\": \"${{ env.IMAGE_NAME }}:${{ github.sha }}\",
+                \"ports\": {\"3000\": \"HTTP\"},
+                \"environment\": {
+                  \"NODE_ENV\": \"production\",
+                  \"PORT\": \"3000\",
+                  \"AUTH_SECRET\": \"${{ secrets.AUTH_SECRET }}\",
+                  \"SMTP_HOST\": \"${{ secrets.SMTP_HOST }}\",
+                  \"SMTP_PORT\": \"587\",
+                  \"SMTP_USER\": \"${{ secrets.SMTP_USER }}\",
+                  \"SMTP_PASS\": \"${{ secrets.SMTP_PASS }}\",
+                  \"SMTP_FROM\": \"${{ secrets.SMTP_FROM }}\",
+                  \"BASE_URL\": \"${{ secrets.BASE_URL }}\"
+                }
+              }
+            }" \
+            --public-endpoint "{
+              \"containerName\": \"ready-check\",
+              \"containerPort\": 3000,
+              \"healthCheck\": {
+                \"path\": \"/health\"
+              }
+            }"

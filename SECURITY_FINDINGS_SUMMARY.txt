@@ -1,0 +1,313 @@
+================================================================================
+OWASP TOP 10 (2021) SECURITY AUDIT - READY-CHECK PROJECT
+================================================================================
+
+EXECUTIVE SUMMARY
+================================================================================
+Project: ready-check (Workshop Real-Time Coordination Tool)
+Audit Date: March 31, 2026
+Scope: Full application code review + npm audit
+Overall Risk: MODERATE
+
+Total Findings: 17
+- Critical: 1
+- High: 3
+- Medium: 7
+- Low: 6
+
+Status: Multiple critical and high-severity issues require immediate remediation
+
+
+CRITICAL FINDINGS (Action Required Immediately)
+================================================================================
+
+[CRITICAL-1] A02:2021 - Cryptographic Failures
+  Unpatched Nodemailer Dependency with High-Severity Vulnerabilities
+  File: package.json
+  Current: nodemailer@6.9.14
+  Issue: Three known CVEs affecting email handling
+    - SMTP command injection (CWE-93)
+    - Denial of Service via recursive address parser (CVSS 7.5)
+    - Email redirection to unintended domains (CWE-436)
+  Impact: Remote code execution, DoS, email spoofing
+  Fix: npm install nodemailer@8.0.4 --save
+
+[CRITICAL-2] A01:2021 - Broken Access Control
+  Missing Authorization Verification on Session QR Endpoint
+  File: src/routes.js:80-99
+  Endpoint: GET /api/sessions/:id/qr
+  Issue: No auth check — any user can generate QR codes for any session
+  Impact: Information disclosure, session enumeration
+  Fix: Add auth.authMiddleware + verify facilitator ownership
+    if (session.facilitatorEmail !== req.facilitator.emailHash) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+
+HIGH-SEVERITY FINDINGS (Remediate Urgently)
+================================================================================
+
+[HIGH-1] A05:2021 - Security Misconfiguration
+  Missing Critical Security Headers
+  Files: server.js, src/routes.js
+  Missing Headers:
+    - X-Frame-Options (clickjacking protection)
+    - Content-Security-Policy (XSS prevention)
+    - X-Content-Type-Options (MIME sniffing)
+    - X-XSS-Protection (legacy browser protection)
+    - Strict-Transport-Security (HTTPS enforcement)
+  Impact: Vulnerability to XSS, clickjacking, MIME attacks
+  Fix: Implement middleware to set all headers before sending responses
+
+[HIGH-2] A05:2021 - Security Misconfiguration
+  CORS Configuration Too Permissive in Development
+  File: server.js:29-30
+  Issue: cors: { origin: '*' } in non-production mode
+  Risk: If NODE_ENV is undefined/mistyped, CORS allows any origin
+  Fix: Whitelist specific origins and validate NODE_ENV strictly
+
+[HIGH-3] A03:2021 - Injection
+  DOM-Based XSS Risk in Facilitator Dashboard
+  File: public/js/facilitator.js (lines 100-111, 224-229)
+  Issue: Nicknames inserted via innerHTML (though escapeHtml used in most places)
+  Risk: XSS vulnerability if escapeHtml is forgotten in future code changes
+  Fix: Use textContent instead of innerHTML, or enforce CSP header
+  Example Attack: nickname = '<img src=x onerror="alert(\'xss\')">'
+
+
+MEDIUM-SEVERITY FINDINGS (Remediate in Next Sprint)
+================================================================================
+
+[MEDIUM-1] A03:2021 - Injection
+  No Input Validation on Label/Nickname Content
+  Files: src/session-store.js:152-155, src/ready-check.js:138-141
+  Issue: sanitize() only truncates, doesn't validate character types
+  Impact: Could allow special characters causing rendering issues
+  Fix: Add character validation (printable characters, no control chars)
+
+[MEDIUM-2] A04:2021 - Insecure Design
+  No Rate Limiting on Socket.IO Events
+  File: src/socket-handlers.js (lines 60-103, 149-189)
+  Events at Risk: respond, create-check, end-check
+  Attack: Participant could spam 10k+ events/sec → DoS
+  Fix: Implement per-socket rate limiting (3 respond/sec, 1 check/sec)
+
+[MEDIUM-3] A04:2021 - Insecure Design
+  No Abuse Detection / Per-Facilitator Session Limits
+  File: src/session-store.js
+  Issue: Facilitator can create unlimited sessions
+  Risk: Memory exhaustion, resource denial
+  Fix: Enforce max 10 sessions per facilitator
+
+[MEDIUM-4] A05:2021 - Security Misconfiguration
+  No HTTPS Enforcement in Production
+  File: src/routes.js:23-25
+  Issue: Auth cookie only secure if NODE_ENV === 'production' (not enforced)
+  Fix: Add HTTPS redirect middleware + always set secure: true
+
+[MEDIUM-5] A07:2021 - Identification and Authentication Failures
+  Weak PIN Policy (6 Digits Only)
+  File: src/auth.js:22-24
+  Issue: 900,000 combinations, brute-forceable in 2.5 hours at 100 req/sec
+  Combined with weak rate limiting per PIN (5 attempts), risk increases
+  Fix: Increase PIN to 8 alphanumeric characters (36^8 = 2.8 trillion)
+
+[MEDIUM-6] A07:2021 - Identification and Authentication Failures
+  Limited Rate Limiting on PIN Verification
+  File: src/auth.js (lines 30-45, 90-93)
+  Issue: Only 5 attempts per PIN; 3 PINs per hour = 15 guesses/hour
+  Attack: Enumerate valid facilitator emails via PIN request failures
+  Fix: Reduce to 3 attempts per PIN, implement IP-based rate limiting
+
+[MEDIUM-7] A09:2021 - Security Logging and Monitoring Failures
+  Insufficient Security Event Logging
+  Files: src/auth.js, src/socket-handlers.js
+  Missing Logs:
+    - Failed PIN verification attempts
+    - Token verification failures
+    - Unauthorized access attempts
+    - Brute force patterns
+  Impact: No audit trail, unable to detect attacks
+  Fix: Implement security event logging with email/request context
+
+
+LOW-SEVERITY FINDINGS (Best Practice Improvements)
+================================================================================
+
+[LOW-1] A02:2021 - Cryptographic Failures
+  Silent Token Verification Failures (No Error Logging)
+  File: src/auth.js:111-116
+  Issue: verifyToken() returns null without logging failure reason
+  Impact: Masked tampering/attack attempts, no audit trail
+  Fix: Log token verification failures with error codes
+
+[LOW-2] A01:2021 - Broken Access Control
+  Weak Authorization Model - Email Hash vs. Email
+  File: src/auth.js:18-20
+  Issue: Using SHA256 (not a password hash) for email storage
+  Risk: Reverse lookup attacks if hash is obtained
+  Fix: Use bcrypt for email hashing or embed session ID in JWT
+
+[LOW-3] A08:2021 - Software and Data Integrity Failures
+  No Message Integrity Checking
+  File: src/socket-handlers.js
+  Issue: WebSocket messages not signed
+  Impact: Low (HTTPS protects in transit), but best practice
+  Fix: Add HMAC-SHA256 signatures on sensitive messages
+
+[LOW-4] A09:2021 - Security Logging and Monitoring Failures
+  No Request IDs in Error Responses
+  Files: src/routes.js, src/socket-handlers.js
+  Issue: Errors don't include unique request IDs for tracking
+  Fix: Add requestId (UUID) to error responses for debugging
+
+[LOW-5] A10:2021 - Server-Side Request Forgery
+  BASE_URL Configuration Not Validated
+  File: src/routes.js (lines 58, 87)
+  Issue: BASE_URL could be misconfigured to point to attacker domain
+  Risk: QR codes could point to phishing site
+  Fix: Validate BASE_URL scheme is HTTP(S) and matches request origin
+
+[LOW-6] A10:2021 - Server-Side Request Forgery
+  No URL Scheme Validation
+  File: src/routes.js
+  Issue: Generated URLs not validated for HTTP(S) scheme
+  Fix: Whitelist allowed URL schemes (http:, https: only)
+
+
+DEPENDENCY AUDIT RESULTS
+================================================================================
+
+npm audit output:
+{
+  "vulnerabilities": 1,
+  "severity": "high",
+  "affected": "nodemailer"
+}
+
+All Other Dependencies: ✓ Up to date
+- bcryptjs@2.4.3 ✓
+- cookie-parser@1.4.6 ✓
+- express@4.21.0 ✓
+- jsonwebtoken@9.0.2 ✓
+- nanoid@3.3.7 ✓
+- qrcode@1.5.4 ✓
+- socket.io@4.7.5 ✓
+
+
+SECURITY STRENGTHS
+================================================================================
+
+✓ Good Password Hashing: Uses bcryptjs (not plain SHA256)
+✓ HTTPOnly Cookies: Auth tokens protected from XSS cookie theft
+✓ SameSite Cookie Policy: Set to 'lax' for CSRF protection
+✓ Input Length Limits: Nicknames (30), labels (200), names (100)
+✓ Rate Limiting on Auth: PIN requests limited to 3/hour
+✓ WebSocket Room-Based Access: Participants can't access facilitator rooms
+✓ No SQL Injection Risk: No database, all in-memory
+✓ Session Auto-Expiry: 4-hour default TTL prevents session accumulation
+✓ Graceful Shutdown: Cleans up resources on termination
+✓ Input Sanitization: trim() + slice() applied to user inputs
+
+
+REMEDIATION PRIORITY MATRIX
+================================================================================
+
+IMMEDIATE (Week 1):
+  1. Update nodemailer@8.0.4
+  2. Add auth.authMiddleware to /api/sessions/:id/qr
+  3. Implement security headers (X-Frame-Options, CSP, etc.)
+
+SHORT-TERM (Week 2-3):
+  4. Add rate limiting to Socket.IO events
+  5. Enforce HTTPS + redirect middleware
+  6. Tighten CORS configuration
+
+MEDIUM-TERM (Sprint 2):
+  7. Increase PIN entropy (8+ alphanumeric)
+  8. Implement token revocation system
+  9. Add security event logging
+
+LONG-TERM (Ongoing):
+  10. URL validation for BASE_URL
+  11. Message signing for critical operations
+  12. Per-facilitator session limits
+
+
+TESTING RECOMMENDATIONS
+================================================================================
+
+XSS Testing:
+  - Try nickname: <img src=x onerror="alert('xss')">
+  - Try label: <script>alert('xss')</script>
+  - Try session name: javascript:alert('xss')
+
+Authorization Testing:
+  - Access /api/sessions/:id/qr without auth token
+  - Access /api/sessions/:id/qr with different user's token
+  - Try to join session as facilitator without auth
+
+Rate Limiting Testing:
+  - Socket: emit 'respond' 100x rapidly, verify rate limit kicks in
+  - HTTP: POST /api/auth/register 10x from same IP, verify throttle
+
+HTTPS/Security Headers:
+  - Use curl to verify X-Frame-Options, CSP headers present
+  - Check that secure cookie flag set in production
+  - Verify HTTP → HTTPS redirect works
+
+
+DEPLOYMENT CHECKLIST
+================================================================================
+
+Before Production Deployment:
+  [ ] npm audit shows 0 vulnerabilities
+  [ ] NODE_ENV explicitly set to 'production'
+  [ ] HTTPS certificate installed
+  [ ] AUTH_SECRET is strong (32+ random characters)
+  [ ] SMTP credentials not in version control
+  [ ] BASE_URL configured for production domain
+  [ ] Security headers middleware enabled
+  [ ] Rate limiting activated
+  [ ] Logging configured to file/monitoring system
+  [ ] Firewall rules restrict access to /api/auth/register
+  [ ] Database backups configured (if added later)
+  [ ] Monitoring alerts set up for auth failures
+
+
+REFERENCES
+================================================================================
+
+OWASP Top 10 2021:
+  - https://owasp.org/Top10/
+
+CWE (Common Weakness Enumeration):
+  - https://cwe.mitre.org/
+
+NPM Security:
+  - npm audit documentation
+  - Nodemailer CVEs: GHSA-mm7p-fcc7-pg87, GHSA-rcmh-qjqh-p98v, GHSA-c7w3-x93f-qmm8
+
+Security Best Practices:
+  - OWASP Authentication Cheat Sheet
+  - Express.js Security Best Practices
+  - Socket.IO Security Considerations
+
+
+NEXT STEPS
+================================================================================
+
+1. Review this audit with the development team
+2. Create GitHub issues for each finding with priority labels
+3. Estimate remediation effort (likely 1-2 sprints for all findings)
+4. Begin with CRITICAL findings immediately
+5. Schedule follow-up audit after remediation
+6. Implement automated security scanning in CI/CD
+
+For questions or clarifications, refer to the detailed SECURITY_AUDIT.md document.
+
+================================================================================
+Report Generated: March 31, 2026
+Auditor: Claude Security Audit Agent
+Status: Ready for Review and Remediation Planning
+================================================================================

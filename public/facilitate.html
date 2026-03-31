@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ready-check — Facilitator Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="connection-status" id="connection-status">Reconnecting...</div>
+
+  <div class="container">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-16">
+      <div>
+        <span class="logo"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <span id="session-name" class="subtitle" style="margin-left: 12px;"></span>
+      </div>
+      <div class="flex items-center gap-8">
+        <span class="roster-count" id="participant-count">0</span>
+        <span class="text-muted">participants</span>
+        <button id="btn-end-session" class="btn btn-danger" style="margin-left: 16px; font-size: 0.8rem; padding: 6px 12px;">End Session</button>
+      </div>
+    </div>
+
+    <div id="alert-facilitator" class="alert hidden"></div>
+
+    <!-- Main Layout: 2-column on large screens -->
+    <div class="facilitator-layout">
+
+      <!-- QR Code + Join Link -->
+      <div id="section-qr" class="card">
+        <h2>Share with Participants</h2>
+        <div class="qr-container">
+          <img id="qr-code" alt="QR Code" src="">
+        </div>
+        <div class="join-url">
+          <span id="join-url-text"></span>
+          <button class="copy-btn" id="btn-copy-url">Copy</button>
+        </div>
+      </div>
+
+      <!-- Roster -->
+      <div class="card">
+        <div class="flex justify-between items-center mb-8">
+          <h2 style="margin-bottom: 0;">Participants</h2>
+          <span id="online-count" class="text-muted" style="font-size: 0.85rem;"></span>
+        </div>
+        <ul class="roster-list" id="roster-list">
+          <li class="text-center text-muted" style="padding: 24px;">Waiting for participants to join...</li>
+        </ul>
+      </div>
+
+      <!-- Issue Ready Check -->
+      <div class="card full-width">
+        <h2>Issue Ready Check</h2>
+        <div class="flex gap-8" style="flex-wrap: wrap;">
+          <input type="text" id="check-label-input" class="input" placeholder="e.g., Copilot CLI installed?" maxlength="200" style="flex: 1; min-width: 200px;">
+          <button id="btn-issue-check" class="btn btn-primary">
+            Issue Check
+          </button>
+          <button id="btn-end-check" class="btn btn-danger hidden">
+            End Check
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Check Results -->
+      <div id="section-active-check" class="card full-width hidden">
+        <div class="flex justify-between items-center mb-16">
+          <h2 style="margin-bottom: 0;" id="active-check-label">Ready Check</h2>
+          <span id="check-timer" class="text-muted"></span>
+        </div>
+
+        <div class="progress-bar mb-16" id="progress-bar">
+          <div class="segment-ready" id="progress-ready" style="width: 0%;"></div>
+          <div class="segment-help" id="progress-help" style="width: 0%;"></div>
+        </div>
+
+        <div class="stats-row" id="stats-row">
+          <div class="stat-item ready">
+            <span class="stat-number" id="stat-ready">0</span>
+            <span class="stat-label">Ready</span>
+          </div>
+          <div class="stat-item help">
+            <span class="stat-number" id="stat-help">0</span>
+            <span class="stat-label">Need Help</span>
+          </div>
+          <div class="stat-item no-response">
+            <span class="stat-number" id="stat-no-response">0</span>
+            <span class="stat-label">No Response</span>
+          </div>
+        </div>
+
+        <div class="results-grid" id="results-grid"></div>
+      </div>
+
+      <!-- History -->
+      <div id="section-history" class="card full-width hidden">
+        <h2>Check History</h2>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/facilitator.js"></script>
+</body>
+</html>

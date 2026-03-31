@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ready-check — Join Session</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="connection-status" id="connection-status">Reconnecting...</div>
+
+  <!-- Join Form -->
+  <div id="view-join" class="hero">
+    <div class="card">
+      <div class="text-center mb-16">
+        <span class="logo"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <p class="subtitle mt-8" id="session-name-display"></p>
+      </div>
+
+      <div id="alert-join" class="alert hidden"></div>
+
+      <div class="form-group">
+        <label for="nickname">Your Nickname</label>
+        <input type="text" id="nickname" class="input" placeholder="Enter your name" maxlength="30" autofocus>
+      </div>
+
+      <button id="btn-join" class="btn btn-primary w-full">
+        Join Session
+      </button>
+    </div>
+  </div>
+
+  <!-- Waiting State -->
+  <div id="view-waiting" class="hidden">
+    <div class="container">
+      <div class="flex justify-between items-center mb-16">
+        <span class="logo" style="font-size: 1.1rem;"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <div class="flex items-center gap-8">
+          <span id="my-nickname" class="badge" style="background: #eff6ff; color: var(--color-primary);"></span>
+          <a href="#" id="link-leave" class="text-muted" style="font-size: 0.8rem;">Leave</a>
+        </div>
+      </div>
+
+      <div class="waiting-state">
+        <div class="pulse"></div>
+        <h2>Waiting for ready check...</h2>
+        <p class="text-muted mt-8">The facilitator will issue a check when it's time</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ready Check Slide-up Panel -->
+  <div id="check-panel" class="check-panel">
+    <div id="check-prompt">
+      <p class="check-label" id="check-label">Are you ready?</p>
+      <div class="check-buttons">
+        <button class="btn btn-ready" data-response="ready">&#x2714; Ready</button>
+        <button class="btn btn-help" data-response="need_help">&#x270B; Need Help</button>
+      </div>
+    </div>
+
+    <div id="check-confirmed" class="check-response-confirmed hidden">
+      <p id="confirmed-text"></p>
+      <p class="text-muted mt-8" style="font-size: 0.85rem;">You can change your response while the check is active</p>
+      <div class="check-buttons mt-16">
+        <button class="btn btn-ready btn-sm" data-response="ready">&#x2714; Ready</button>
+        <button class="btn btn-help btn-sm" data-response="need_help">&#x270B; Need Help</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/participant.js"></script>
+</body>
+</html>

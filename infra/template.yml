@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ready-check — One-click deployment stack.
+  Provisions Lightsail Container Service, IAM OIDC deploy role, SES email identity, and DNS.
+
+# =============================================================================
+# Parameters
+# =============================================================================
+Parameters:
+  DomainName:
+    Type: String
+    Description: 'Full subdomain for the app (e.g., readycheck.example.com)'
+    AllowedPattern: '^[a-z0-9][a-z0-9\-\.]+[a-z0-9]$'
+
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: 'Route 53 hosted zone ID for the parent domain'
+
+  GitHubOrg:
+    Type: String
+    Description: 'GitHub organization or username that owns the repository'
+    Default: 'sidgod'
+
+  GitHubRepo:
+    Type: String
+    Description: 'GitHub repository name'
+    Default: 'ready-check'
+
+  GitHubBranch:
+    Type: String
+    Description: 'Branch that triggers deployment'
+    Default: 'main'
+
+  ContainerScale:
+    Type: String
+    Description: 'Lightsail container service scale (nano = $7/mo)'
+    Default: 'nano'
+    AllowedValues: [nano, micro, small, medium, large, xlarge]
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for SES sender identity (facilitator PIN emails)'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+
+  ExistingOIDCProvider:
+    Type: String
+    Description: 'Set to true if GitHub OIDC provider already exists in this account'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+# =============================================================================
+# Conditions
+# =============================================================================
+Conditions:
+  CreateOIDCProvider: !Equals [!Ref ExistingOIDCProvider, 'false']
+
+# =============================================================================
+# Resources
+# =============================================================================
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # Compute — Lightsail Container Service
+  # ---------------------------------------------------------------------------
+  ContainerService:
+    Type: AWS::Lightsail::Container
+    Properties:
+      ServiceName: ready-check
+      Power: !Ref ContainerScale
+      Scale: 1
+      Tags:
+        - Key: Project
+          Value: ready-check
+
+  # ---------------------------------------------------------------------------
+  # Auth / Email — SES Email Identity
+  # ---------------------------------------------------------------------------
+  SESEmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref NotificationEmail
+
+  # ---------------------------------------------------------------------------
+  # CI/CD — OIDC Provider (conditional)
+  # ---------------------------------------------------------------------------
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  # ---------------------------------------------------------------------------
+  # CI/CD — IAM Deploy Role
+  # ---------------------------------------------------------------------------
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'github-actions-${GitHubRepo}-deploy'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateOIDCProvider
+                - !Ref GitHubOIDCProvider
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}'
+      Policies:
+        - PolicyName: LightsailContainerDeploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: LightsailDeploy
+                Effect: Allow
+                Action:
+                  - lightsail:CreateContainerServiceDeployment
+                  - lightsail:GetContainerServices
+                  - lightsail:GetContainerServiceDeployments
+                  - lightsail:GetContainerImages
+                  - lightsail:RegisterContainerImage
+                Resource: '*'
+
+  # ---------------------------------------------------------------------------
+  # DNS — Route 53 Record
+  # ---------------------------------------------------------------------------
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt ContainerService.Url
+
+  # ---------------------------------------------------------------------------
+  # Secrets — Auth Secret
+  # ---------------------------------------------------------------------------
+  AuthSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: ready-check-auth-secret
+      Description: 'JWT signing secret for ready-check facilitator auth'
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+# =============================================================================
+# Outputs
+# =============================================================================
+Outputs:
+  ServiceURL:
+    Description: 'Public URL of the ready-check service'
+    Value: !Sub 'https://${DomainName}'
+
+  ContainerServiceURL:
+    Description: 'Lightsail Container Service default URL'
+    Value: !GetAtt ContainerService.Url
+
+  DeployRoleARN:
+    Description: 'IAM Role ARN — add as GitHub secret AWS_ROLE_ARN'
+    Value: !GetAtt DeployRole.Arn
+
+  AuthSecretARN:
+    Description: 'Secrets Manager ARN for the auth secret — retrieve value for GitHub secret AUTH_SECRET'
+    Value: !Ref AuthSecret
+
+  PostDeploySteps:
+    Description: 'Manual steps after stack creation'
+    Value: >
+      1. Verify the SES email identity (check inbox for verification email).
+      2. Create SES SMTP credentials in IAM console.
+      3. Add GitHub repository secrets: AWS_ROLE_ARN, AUTH_SECRET, SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM, BASE_URL.
+      4. Push to main branch to trigger first deployment.

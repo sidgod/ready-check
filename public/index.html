@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ready-check</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="hero">
+    <!-- Auth: Register -->
+    <div id="view-register" class="card">
+      <div class="text-center mb-16">
+        <span class="logo"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <p class="subtitle mt-8">Real-time workshop checkpoint tool</p>
+      </div>
+
+      <div id="alert-register" class="alert hidden"></div>
+
+      <div class="form-group">
+        <label for="email">Facilitator Email</label>
+        <input type="email" id="email" class="input" placeholder="you@company.com" autocomplete="email">
+      </div>
+
+      <button id="btn-register" class="btn btn-primary w-full">
+        Send PIN
+      </button>
+
+      <p class="text-center text-muted mt-16" style="font-size: 0.8rem;">
+        One-time setup. We'll send a 6-digit PIN to verify your email.
+      </p>
+    </div>
+
+    <!-- Auth: Verify PIN -->
+    <div id="view-verify" class="card hidden">
+      <div class="text-center mb-16">
+        <span class="logo"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <p class="subtitle mt-8">Check your email for a 6-digit PIN</p>
+      </div>
+
+      <div id="alert-verify" class="alert hidden"></div>
+
+      <div class="form-group text-center">
+        <label for="pin">Verification PIN</label>
+        <input type="text" id="pin" class="input pin-input" maxlength="6" placeholder="000000" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+      </div>
+
+      <button id="btn-verify" class="btn btn-primary w-full">
+        Verify
+      </button>
+
+      <p class="text-center mt-16">
+        <a href="#" id="link-back-register" class="text-muted" style="font-size: 0.85rem;">Use a different email</a>
+      </p>
+    </div>
+
+    <!-- Authenticated: Create Session -->
+    <div id="view-create" class="card hidden">
+      <div class="text-center mb-16">
+        <span class="logo"><span class="logo-icon">&#x2714;</span> ready-check</span>
+        <p class="subtitle mt-8">Create a new workshop session</p>
+      </div>
+
+      <div id="alert-create" class="alert hidden"></div>
+
+      <div class="form-group">
+        <label for="session-name">Session Name (optional)</label>
+        <input type="text" id="session-name" class="input" placeholder="e.g., Copilot CLI Workshop" maxlength="100">
+      </div>
+
+      <div class="form-group">
+        <label for="check-timeout">Ready Check Timeout</label>
+        <select id="check-timeout" class="input">
+          <option value="120">2 minutes</option>
+          <option value="180">3 minutes</option>
+          <option value="300" selected>5 minutes</option>
+          <option value="600">10 minutes</option>
+          <option value="900">15 minutes</option>
+          <option value="1800">30 minutes</option>
+        </select>
+      </div>
+
+      <button id="btn-create" class="btn btn-primary w-full">
+        Create Session
+      </button>
+
+      <p class="text-center mt-16">
+        <a href="#" id="link-logout" class="text-muted" style="font-size: 0.85rem;">Sign out</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+</body>
+</html>
