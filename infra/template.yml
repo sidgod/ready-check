@@ -102,6 +102,15 @@ Resources:
                   - 'arn:aws:route53:::change/*'
 
   # ---------------------------------------------------------------------------
+  # TLS — Lambda log group (explicit retention to avoid unbounded CloudWatch costs)
+  # ---------------------------------------------------------------------------
+  CertValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GitHubRepo}-cert-validator'
+      RetentionInDays: 7
+
+  # ---------------------------------------------------------------------------
   # TLS — Lambda function: fetch validation records, create DNS, wait for ISSUED
   # ---------------------------------------------------------------------------
   CertValidatorFunction:

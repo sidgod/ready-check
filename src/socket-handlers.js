@@ -2,6 +2,7 @@ const readyCheck = require('./ready-check');
 const auth = require('./auth');
 const cookie = require('cookie');
 const { socketRateLimiter, cleanupSocketRateLimit, isCleanInput } = require('./security');
+const metrics = require('./metrics');
 
 // Debounce roster updates to avoid flooding facilitator
 const rosterDebounceTimers = new Map();
@@ -40,6 +41,8 @@ function setup(io, store) {
 
       socket.join(`session:${sessionId}`);
       socket.data = { sessionId, visitorId, role: 'participant' };
+
+      metrics.inc('participantsJoined');
 
       // Confirm join to participant
       socket.emit('joined', {
@@ -82,6 +85,7 @@ function setup(io, store) {
 
       try {
         const response = readyCheck.respond(session, { checkId, visitorId, value });
+        metrics.inc(value === 'ready' ? 'responsesReady' : 'responsesNeedHelp');
 
         // Ack to participant
         if (typeof ack === 'function') ack({ ok: true, value: response.value });
@@ -180,6 +184,7 @@ function setup(io, store) {
 
       try {
         const check = readyCheck.createReadyCheck(session, { label, timeoutSeconds });
+        metrics.inc('readyChecksIssued');
 
         // Broadcast to all participants
         io.to(`session:${sessionId}`).emit('ready-check:start', {
@@ -280,6 +285,12 @@ function setup(io, store) {
 function completeCheck(io, store, session, reason) {
   const check = session.activeCheck;
   if (!check) return;
+
+  // Track completion reason
+  if (reason === 'timed_out') metrics.inc('checksTimedOut');
+  else if (reason === 'completed' && check.responses.size === session.participants.size)
+    metrics.inc('checksAutoCompleted');
+  else metrics.inc('checksManuallyEnded');
 
   // Clear timeout timer
   if (check._timer) {

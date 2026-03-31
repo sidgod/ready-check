@@ -2,6 +2,7 @@ const express = require('express');
 const QRCode = require('qrcode');
 const auth = require('./auth');
 const path = require('path');
+const metrics = require('./metrics');
 
 function setup(app, store) {
   const router = express.Router();
@@ -59,6 +60,8 @@ function setup(app, store) {
       const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
       const joinUrl = `${baseUrl}/session/${session.id}`;
       const facilitateUrl = `${baseUrl}/session/${session.id}/facilitate`;
+
+      metrics.inc('sessionsCreated');
 
       const qrCodeDataUrl = await QRCode.toDataURL(joinUrl, {
         width: 400,
@@ -126,6 +129,12 @@ function setup(app, store) {
       uptime: process.uptime(),
       ...stats,
     });
+  });
+
+  // --- Usage Metrics (auth required) ---
+
+  router.get('/api/metrics', auth.authMiddleware, (req, res) => {
+    res.json(metrics.snapshot(store));
   });
 
   // --- Page Routes ---

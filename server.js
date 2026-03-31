@@ -8,6 +8,7 @@ const { SessionStore } = require('./src/session-store');
 const socketHandlers = require('./src/socket-handlers');
 const routes = require('./src/routes');
 const mailer = require('./src/mailer');
+const metrics = require('./src/metrics');
 const { securityHeaders, validateBaseUrl } = require('./src/security');
 
 // Load .env in development
@@ -63,6 +64,9 @@ mailer.init();
 // Setup routes and socket handlers
 routes.setup(app, store);
 socketHandlers.setup(io, store);
+
+// Start periodic metrics logging (every 5 minutes → CloudWatch)
+metrics.startPeriodicLogging(store);
 
 // Session cleanup with socket notification
 setInterval(() => {
