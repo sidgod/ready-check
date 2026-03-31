@@ -2,11 +2,11 @@
 
 Real-time workshop checkpoint tool inspired by MMORPG raid mechanics.
 
-A facilitator creates a session, shares a QR code or link, and participants join with a nickname. The facilitator issues ready checks at any time — participants respond **Ready**, **Not Ready**, or **Need Help**. Results stream in real-time on the facilitator's dashboard.
+A facilitator creates a session, shares a QR code or link, and participants join with a nickname. The facilitator issues ready checks at any time — participants respond **Ready** or **Need Help**. Results stream in real-time on the facilitator's dashboard.
 
 ## Why?
 
-In hands-on workshops, people progress at different speeds. Asking "any questions?" to a silent room doesn't work. **ready-check** gives you a non-intrusive signal without putting anyone on the spot — and the "Need Help" button lets participants ask for help without raising their hand in front of everyone.
+In hands-on workshops, people progress at different speeds. Asking "any questions?" to a silent room doesn't work — especially in remote sessions where cameras are off. **ready-check** gives you a non-intrusive signal without putting anyone on the spot, and the "Need Help" button lets participants ask for help without raising their hand in front of everyone.
 
 ## Quick Start
 
@@ -26,14 +26,19 @@ Open `http://localhost:3000`, register with your email, create a session, and sh
 
 - **Real-time ready checks** — facilitator issues a check, participants respond instantly via WebSocket
 - **QR code sharing** — project the QR code on screen; participants scan and join
-- **Three response types** — Ready, Not Ready, Need Help (need help is visible only to the facilitator)
+- **Two response types** — Ready or Need Help (need help is visible only to the facilitator)
+- **Configurable timeout** — 2 minutes to 30 minutes per ready check, set by the facilitator
+- **Auto-complete** — check ends automatically when everyone is ready
 - **Live roster** — see who's connected, who's offline, who responded
-- **Response changes** — participants can change their answer while a check is active
+- **Response changes** — participants can change their answer while a check is active (stuck → ready after getting help)
+- **Background tab notifications** — browser tab title flashes when a check is issued, so participants in other tabs notice
+- **Session controls** — facilitator can end a session; participants can leave and rejoin
 - **Auto-reconnect** — handles WiFi blips and phone screen locks gracefully
 - **Responsive design** — laptop-first for participants, projector-optimized for facilitators, works on mobile
 - **Facilitator auth** — one-time PIN-via-email setup prevents abuse
-- **Zero database** — all state in memory, no infrastructure to manage
-- **One-click AWS deploy** — CloudFormation template provisions everything
+- **Per-facilitator limits** — max 5 concurrent sessions to prevent abuse
+- **Zero database** — all state in memory, ephemeral by design, no GDPR headaches
+- **One-click AWS deploy** — CloudFormation template provisions everything including TLS certificate
 
 ## Deploy to AWS
 
@@ -42,11 +47,13 @@ Open `http://localhost:3000`, register with your email, create a session, and sh
 The CloudFormation template provisions:
 
 - Lightsail Container Service (nano, ~$7/mo)
+- Lightsail TLS certificate with automated DNS validation via Lambda
 - IAM role with OIDC federation for GitHub Actions (no stored AWS keys)
 - SES email identity for facilitator PIN emails
 - Route 53 DNS record for your subdomain
+- Secrets Manager secret for JWT signing
 
-After stack creation, follow the post-deploy steps in the stack outputs to configure GitHub secrets and trigger your first deployment.
+After stack creation, follow the post-deploy steps in the stack outputs to configure SES DKIM records, GitHub secrets, and trigger your first deployment.
 
 ## Self-Hosted
 
