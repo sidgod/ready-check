@@ -60,14 +60,204 @@ Conditions:
 Resources:
 
   # ---------------------------------------------------------------------------
+  # TLS — Lightsail Certificate for custom domain
+  # ---------------------------------------------------------------------------
+  TLSCertificate:
+    Type: AWS::Lightsail::Certificate
+    Properties:
+      CertificateName: !Sub '${GitHubRepo}-cert'
+      DomainName: !Ref DomainName
+
+  # ---------------------------------------------------------------------------
+  # TLS — Lambda role for certificate validation
+  # ---------------------------------------------------------------------------
+  CertValidatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${GitHubRepo}-cert-validator'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CertValidation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lightsail:GetCertificates
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - route53:ChangeResourceRecordSets
+                  - route53:GetChange
+                Resource:
+                  - !Sub 'arn:aws:route53:::hostedzone/${HostedZoneId}'
+                  - 'arn:aws:route53:::change/*'
+
+  # ---------------------------------------------------------------------------
+  # TLS — Lambda function: fetch validation records, create DNS, wait for ISSUED
+  # ---------------------------------------------------------------------------
+  CertValidatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${GitHubRepo}-cert-validator'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 600
+      Role: !GetAtt CertValidatorRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import time
+          import json
+
+          lightsail = boto3.client('lightsail')
+          route53 = boto3.client('route53')
+
+          def handler(event, context):
+              print(json.dumps(event))
+              try:
+                  if event['RequestType'] == 'Delete':
+                      # Clean up validation CNAME on stack delete
+                      cleanup_dns(event)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+
+                  cert_name = event['ResourceProperties']['CertificateName']
+                  hosted_zone_id = event['ResourceProperties']['HostedZoneId']
+
+                  # Step 1: Get certificate validation records
+                  validation_record = get_validation_record(cert_name)
+                  if not validation_record:
+                      cfnresponse.send(event, context, cfnresponse.FAILED,
+                                       {}, reason='No validation records found for certificate')
+                      return
+
+                  print(f"Validation record: {validation_record}")
+
+                  # Step 2: Create Route 53 CNAME for DNS validation
+                  create_dns_record(hosted_zone_id, validation_record)
+
+                  # Step 3: Poll until certificate is ISSUED (up to 8 minutes)
+                  if wait_for_validation(cert_name, timeout=480):
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'ValidationDomain': validation_record['Name'],
+                      })
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.FAILED,
+                                       {}, reason='Certificate validation timed out after 8 minutes')
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED,
+                                   {}, reason=str(e)[:256])
+
+          def get_validation_record(cert_name):
+              resp = lightsail.get_certificates(
+                  certificateName=cert_name,
+                  includeCertificateDetails=True
+              )
+              certs = resp.get('certificates', [])
+              if not certs:
+                  return None
+
+              cert = certs[0].get('certificateDetail', {})
+              domain_validations = cert.get('domainValidationRecords', [])
+              for dv in domain_validations:
+                  rr = dv.get('resourceRecord', {})
+                  if rr.get('type') == 'CNAME':
+                      return {'Name': rr['name'], 'Value': rr['value']}
+              return None
+
+          def create_dns_record(hosted_zone_id, record):
+              route53.change_resource_record_sets(
+                  HostedZoneId=hosted_zone_id,
+                  ChangeBatch={
+                      'Changes': [{
+                          'Action': 'UPSERT',
+                          'ResourceRecordSet': {
+                              'Name': record['Name'],
+                              'Type': 'CNAME',
+                              'TTL': 300,
+                              'ResourceRecords': [{'Value': record['Value']}]
+                          }
+                      }]
+                  }
+              )
+
+          def wait_for_validation(cert_name, timeout=480):
+              start = time.time()
+              while time.time() - start < timeout:
+                  resp = lightsail.get_certificates(
+                      certificateName=cert_name,
+                      includeCertificateDetails=True
+                  )
+                  certs = resp.get('certificates', [])
+                  if certs:
+                      status = certs[0].get('certificateDetail', {}).get('status', '')
+                      print(f"Certificate status: {status}")
+                      if status == 'ISSUED':
+                          return True
+                      if status == 'FAILED':
+                          return False
+                  time.sleep(15)
+              return False
+
+          def cleanup_dns(event):
+              try:
+                  cert_name = event['ResourceProperties']['CertificateName']
+                  hosted_zone_id = event['ResourceProperties']['HostedZoneId']
+                  record = get_validation_record(cert_name)
+                  if record:
+                      route53.change_resource_record_sets(
+                          HostedZoneId=hosted_zone_id,
+                          ChangeBatch={
+                              'Changes': [{
+                                  'Action': 'DELETE',
+                                  'ResourceRecordSet': {
+                                      'Name': record['Name'],
+                                      'Type': 'CNAME',
+                                      'TTL': 300,
+                                      'ResourceRecords': [{'Value': record['Value']}]
+                                  }
+                              }]
+                          }
+                      )
+              except Exception as e:
+                  print(f"Cleanup error (non-fatal): {e}")
+
+  # ---------------------------------------------------------------------------
+  # TLS — Custom Resource: trigger certificate validation
+  # ---------------------------------------------------------------------------
+  CertValidation:
+    Type: Custom::CertificateValidation
+    DependsOn: TLSCertificate
+    Properties:
+      ServiceToken: !GetAtt CertValidatorFunction.Arn
+      CertificateName: !Sub '${GitHubRepo}-cert'
+      HostedZoneId: !Ref HostedZoneId
+
+  # ---------------------------------------------------------------------------
   # Compute — Lightsail Container Service
   # ---------------------------------------------------------------------------
   ContainerService:
     Type: AWS::Lightsail::Container
+    DependsOn: CertValidation
     Properties:
       ServiceName: ready-check
       Power: !Ref ContainerScale
       Scale: 1
+      PublicDomainNames:
+        - CertificateName: !Sub '${GitHubRepo}-cert'
+          DomainNames:
+            - !Ref DomainName
       Tags:
         - Key: Project
           Value: ready-check
@@ -136,13 +326,15 @@ Resources:
   # ---------------------------------------------------------------------------
   DNSRecord:
     Type: AWS::Route53::RecordSet
+    DependsOn: ContainerService
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
       Type: CNAME
       TTL: 300
       ResourceRecords:
-        - !GetAtt ContainerService.Url
+        # ContainerService.Url returns "https://host/" — extract just the hostname
+        - !Select [2, !Split ["/", !GetAtt ContainerService.Url]]
 
   # ---------------------------------------------------------------------------
   # Secrets — Auth Secret
@@ -179,7 +371,7 @@ Outputs:
   PostDeploySteps:
     Description: 'Manual steps after stack creation'
     Value: >
-      1. Verify the SES email identity (check inbox for verification email).
+      1. Verify the SES domain identity: go to SES console > Identities, add DKIM CNAME records to DNS.
       2. Create SES SMTP credentials in IAM console.
       3. Add GitHub repository secrets: AWS_ROLE_ARN, AUTH_SECRET, SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM, BASE_URL.
       4. Push to main branch to trigger first deployment.
