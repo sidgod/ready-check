@@ -54,8 +54,15 @@
       <!-- Issue Ready Check -->
       <div class="card full-width">
         <h2>Issue Ready Check</h2>
+        <div class="form-group">
+          <label for="check-label-input">Title</label>
+          <input type="text" id="check-label-input" class="input" placeholder="e.g., Copilot CLI installed?" maxlength="200">
+        </div>
+        <div class="form-group">
+          <label for="check-instructions-input">Instructions (optional)</label>
+          <textarea id="check-instructions-input" class="input check-instructions-textarea" placeholder="e.g., Run: brew install copilot-cli&#10;Then verify with: copilot-cli --version" maxlength="2000" rows="3"></textarea>
+        </div>
         <div class="flex gap-8" style="flex-wrap: wrap;">
-          <input type="text" id="check-label-input" class="input" placeholder="e.g., Copilot CLI installed?" maxlength="200" style="flex: 1; min-width: 200px;">
           <button id="btn-issue-check" class="btn btn-primary">
             Issue Check
           </button>
@@ -71,6 +78,7 @@
           <h2 style="margin-bottom: 0;" id="active-check-label">Ready Check</h2>
           <span id="check-timer" class="text-muted"></span>
         </div>
+        <div id="active-check-instructions" class="check-instructions-display hidden"></div>
 
         <div class="progress-bar mb-16" id="progress-bar">
           <div class="segment-ready" id="progress-ready" style="width: 0%;"></div>

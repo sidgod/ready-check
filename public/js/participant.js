@@ -108,12 +108,24 @@ socket.on('ready-check:start', (data) => {
   const label = data.label || 'Are you ready?';
   document.getElementById('check-label').textContent = label;
 
+  // Show instructions if provided
+  const instructionsEl = document.getElementById('check-instructions');
+  if (data.instructions) {
+    instructionsEl.textContent = data.instructions;
+    instructionsEl.classList.remove('hidden');
+  } else {
+    instructionsEl.classList.add('hidden');
+  }
+
   if (myResponse) {
     showConfirmed(myResponse);
   } else {
     showPrompt();
   }
 
+  // Hide waiting state and show the check panel
+  const waitingState = document.querySelector('.waiting-state');
+  if (waitingState) waitingState.classList.add('hidden');
   document.getElementById('check-panel').classList.add('active');
 
   // Flash tab title if tab is in background
@@ -126,6 +138,11 @@ socket.on('ready-check:end', () => {
   currentCheckId = null;
   myResponse = null;
   document.getElementById('check-panel').classList.remove('active');
+
+  // Restore waiting state
+  const waitingState = document.querySelector('.waiting-state');
+  if (waitingState) waitingState.classList.remove('hidden');
+
   stopTitleFlash();
 });
 

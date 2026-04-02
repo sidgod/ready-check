@@ -37,7 +37,7 @@ socket.on('session:state', (state) => {
   if (state.activeCheck) {
     currentCheckId = state.activeCheck.checkId;
     responseMap = state.activeCheck.responses || {};
-    showActiveCheck(state.activeCheck.label, state.activeCheck.summary);
+    showActiveCheck(state.activeCheck.label, state.activeCheck.summary, state.activeCheck.instructions);
     renderResults();
   }
 
@@ -115,8 +115,10 @@ function updateRoster(roster) {
 
 function issueCheck() {
   const label = document.getElementById('check-label-input').value.trim();
-  socket.emit('create-check', { label });
+  const instructions = document.getElementById('check-instructions-input').value.trim();
+  socket.emit('create-check', { label, instructions });
   document.getElementById('check-label-input').value = '';
+  document.getElementById('check-instructions-input').value = '';
 }
 
 function endCurrentCheck() {
@@ -174,7 +176,7 @@ socket.on('ready-check:start', (data) => {
   checkTimeoutSeconds = data.timeoutSeconds;
   responseMap = {};
 
-  showActiveCheck(data.label);
+  showActiveCheck(data.label, null, data.instructions);
   startTimer();
 });
 
@@ -182,9 +184,18 @@ socket.on('ready-check:end', () => {
   // Handled by check:complete for facilitator
 });
 
-function showActiveCheck(label, summary) {
+function showActiveCheck(label, summary, instructions) {
   document.getElementById('section-active-check').classList.remove('hidden');
   document.getElementById('active-check-label').textContent = label || 'Ready Check';
+
+  // Show instructions if provided
+  const instructionsEl = document.getElementById('active-check-instructions');
+  if (instructions) {
+    instructionsEl.textContent = instructions;
+    instructionsEl.classList.remove('hidden');
+  } else {
+    instructionsEl.classList.add('hidden');
+  }
 
   document.getElementById('btn-issue-check').classList.add('hidden');
   document.getElementById('btn-end-check').classList.remove('hidden');

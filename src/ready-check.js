@@ -1,6 +1,6 @@
 const { nanoid } = require('nanoid');
 
-function createReadyCheck(session, { label = '', timeoutSeconds } = {}) {
+function createReadyCheck(session, { label = '', instructions = '', timeoutSeconds } = {}) {
   if (session.activeCheck) {
     throw new Error('A ready check is already active');
   }
@@ -10,6 +10,7 @@ function createReadyCheck(session, { label = '', timeoutSeconds } = {}) {
   const check = {
     id: nanoid(6),
     label: sanitize(label, 200),
+    instructions: sanitize(instructions, 2000),
     startedAt: Date.now(),
     timeoutSeconds: timeout,
     status: 'active',
@@ -110,6 +111,7 @@ function getHistory(session) {
   return session.readyChecks.map((check) => ({
     id: check.id,
     label: check.label,
+    instructions: check.instructions || '',
     startedAt: check.startedAt,
     status: check.status,
     summary: {

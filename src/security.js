@@ -95,11 +95,18 @@ function cleanupSocketRateLimit(socketId) {
 // --- Input Validation (A03) ---
 
 const PRINTABLE_REGEX = /^[\x20-\x7E\u00A0-\uFFFF]*$/;
+const PRINTABLE_MULTILINE_REGEX = /^[\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]*$/;
 
 function isCleanInput(str) {
   if (typeof str !== 'string') return false;
   // Reject control characters (except common whitespace)
   return PRINTABLE_REGEX.test(str);
+}
+
+function isCleanMultilineInput(str) {
+  if (typeof str !== 'string') return false;
+  // Like isCleanInput but allows tab, newline, carriage return for multi-line text
+  return PRINTABLE_MULTILINE_REGEX.test(str);
 }
 
 // --- BASE_URL Validation (A10) ---
@@ -119,5 +126,6 @@ module.exports = {
   socketRateLimiter,
   cleanupSocketRateLimit,
   isCleanInput,
+  isCleanMultilineInput,
   validateBaseUrl,
 };

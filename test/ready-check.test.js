@@ -41,6 +41,26 @@ describe('Ready Check', () => {
       const check = createReadyCheck(session, { label: 'x'.repeat(300) });
       assert.equal(check.label.length, 200);
     });
+
+    it('creates a check with instructions', () => {
+      const check = createReadyCheck(session, {
+        label: 'Install CLI',
+        instructions: 'Run: brew install copilot-cli\nThen verify with: copilot-cli --version',
+      });
+      assert.equal(check.label, 'Install CLI');
+      assert.ok(check.instructions.includes('brew install'));
+      assert.ok(check.instructions.includes('copilot-cli --version'));
+    });
+
+    it('defaults instructions to empty string', () => {
+      const check = createReadyCheck(session, { label: 'Simple check' });
+      assert.equal(check.instructions, '');
+    });
+
+    it('sanitizes instructions to max 2000 chars', () => {
+      const check = createReadyCheck(session, { instructions: 'y'.repeat(3000) });
+      assert.equal(check.instructions.length, 2000);
+    });
   });
 
   describe('respond', () => {
@@ -118,6 +138,15 @@ describe('Ready Check', () => {
       assert.equal(history[0].status, 'completed');
       assert.equal(history[1].label, 'Check 2');
       assert.equal(history[1].status, 'timed_out');
+    });
+
+    it('includes instructions in history', () => {
+      createReadyCheck(session, { label: 'Setup', instructions: 'Step 1\nStep 2' });
+      endCheck(session, 'completed');
+
+      const history = getHistory(session);
+      assert.equal(history.length, 1);
+      assert.ok(history[0].instructions.includes('Step 1'));
     });
   });
 

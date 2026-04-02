@@ -1,7 +1,7 @@
 const readyCheck = require('./ready-check');
 const auth = require('./auth');
 const cookie = require('cookie');
-const { socketRateLimiter, cleanupSocketRateLimit, isCleanInput } = require('./security');
+const { socketRateLimiter, cleanupSocketRateLimit, isCleanInput, isCleanMultilineInput } = require('./security');
 const metrics = require('./metrics');
 
 // Debounce roster updates to avoid flooding facilitator
@@ -58,6 +58,7 @@ function setup(io, store) {
         socket.emit('ready-check:start', {
           checkId: check.id,
           label: check.label,
+          instructions: check.instructions || '',
           timeoutSeconds: check.timeoutSeconds,
           startedAt: check.startedAt,
           existingResponse: existingResponse ? existingResponse.value : null,
@@ -153,6 +154,7 @@ function setup(io, store) {
           ? {
               checkId: session.activeCheck.id,
               label: session.activeCheck.label,
+              instructions: session.activeCheck.instructions || '',
               timeoutSeconds: session.activeCheck.timeoutSeconds,
               startedAt: session.activeCheck.startedAt,
               summary: readyCheck.getSummary(session),
@@ -163,7 +165,7 @@ function setup(io, store) {
       });
     });
 
-    socket.on('create-check', ({ label, timeoutSeconds } = {}) => {
+    socket.on('create-check', ({ label, instructions, timeoutSeconds } = {}) => {
       if (!socketRateLimiter(socket, 'create-check')) {
         return socket.emit('error', { message: 'Please wait before issuing another check' });
       }
@@ -182,14 +184,19 @@ function setup(io, store) {
         return socket.emit('error', { message: 'Check label contains invalid characters' });
       }
 
+      if (instructions && !isCleanMultilineInput(instructions)) {
+        return socket.emit('error', { message: 'Instructions contain invalid characters' });
+      }
+
       try {
-        const check = readyCheck.createReadyCheck(session, { label, timeoutSeconds });
+        const check = readyCheck.createReadyCheck(session, { label, instructions, timeoutSeconds });
         metrics.inc('readyChecksIssued');
 
         // Broadcast to all participants
         io.to(`session:${sessionId}`).emit('ready-check:start', {
           checkId: check.id,
           label: check.label,
+          instructions: check.instructions || '',
           timeoutSeconds: check.timeoutSeconds,
           startedAt: check.startedAt,
           existingResponse: null,
