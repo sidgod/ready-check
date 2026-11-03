@@ -49,11 +49,11 @@ The CloudFormation template provisions:
 - Lightsail Container Service (nano, ~$7/mo)
 - Lightsail TLS certificate with automated DNS validation via Lambda
 - IAM role with OIDC federation for GitHub Actions (no stored AWS keys)
-- SES email identity for facilitator PIN emails
+- SES domain identity with DKIM records for facilitator PIN emails
 - Route 53 DNS record for your subdomain
 - Secrets Manager secret for JWT signing
 
-After stack creation, follow the post-deploy steps in the stack outputs to configure SES DKIM records, GitHub secrets, and trigger your first deployment.
+After stack creation, follow the post-deploy steps in the stack outputs to request SES production access, set GitHub secrets, and trigger your first deployment. Until production access is approved, the SES sandbox only delivers PIN emails to verified addresses.
 
 ## Self-Hosted
 

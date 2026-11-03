@@ -65,7 +65,13 @@ async function register(email) {
     attempts: 0,
   });
 
-  await mailer.sendPIN(email, pin);
+  try {
+    await mailer.sendPIN(email, pin);
+  } catch (err) {
+    // SMTP errors expose provider details, so keep them out of the response
+    console.error('[auth] Failed to send PIN email:', err.message);
+    throw new Error('Unable to send PIN. Please try again later.');
+  }
 
   return { message: 'PIN sent to your email' };
 }

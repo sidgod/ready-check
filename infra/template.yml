@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   ready-check — One-click deployment stack.
-  Provisions Lightsail Container Service, IAM OIDC deploy role, SES email identity, and DNS.
+  Provisions Lightsail Container Service, IAM OIDC deploy role, SES identities, and DNS.
 
 # =============================================================================
 # Parameters
@@ -39,7 +39,7 @@ Parameters:
 
   NotificationEmail:
     Type: String
-    Description: 'Email address for SES sender identity (facilitator PIN emails)'
+    Description: 'Email address to verify in SES, for testing PIN delivery while the account is in the SES sandbox'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
 
   ExistingOIDCProvider:
@@ -272,12 +272,39 @@ Resources:
           Value: ready-check
 
   # ---------------------------------------------------------------------------
-  # Auth / Email — SES Email Identity
+  # Auth / Email — SES Identities
   # ---------------------------------------------------------------------------
   SESEmailIdentity:
     Type: AWS::SES::EmailIdentity
     Properties:
       EmailIdentity: !Ref NotificationEmail
+
+  # Sender identity for PIN emails (SMTP_FROM must be an address on this domain)
+  SESDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref DomainName
+
+  SESDomainDKIM:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !GetAtt SESDomainIdentity.DkimDNSTokenName1
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt SESDomainIdentity.DkimDNSTokenValue1
+        - Name: !GetAtt SESDomainIdentity.DkimDNSTokenName2
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt SESDomainIdentity.DkimDNSTokenValue2
+        - Name: !GetAtt SESDomainIdentity.DkimDNSTokenName3
+          Type: CNAME
+          TTL: 300
+          ResourceRecords:
+            - !GetAtt SESDomainIdentity.DkimDNSTokenValue3
 
   # ---------------------------------------------------------------------------
   # CI/CD — OIDC Provider (conditional)
@@ -379,8 +406,8 @@ Outputs:
 
   PostDeploySteps:
     Description: 'Manual steps after stack creation'
-    Value: >
-      1. Verify the SES domain identity: go to SES console > Identities, add DKIM CNAME records to DNS.
+    Value: !Sub >
+      1. Request SES production access (SES console > Account dashboard). Until it is approved, the SES sandbox only delivers PIN emails to verified addresses.
       2. Create SES SMTP credentials in IAM console.
-      3. Add GitHub repository secrets: AWS_ROLE_ARN, AUTH_SECRET, SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM, BASE_URL.
+      3. Add GitHub repository secrets: AWS_ROLE_ARN, AUTH_SECRET, SMTP_HOST, SMTP_USER, SMTP_PASS, BASE_URL, and SMTP_FROM (noreply@${DomainName}).
       4. Push to main branch to trigger first deployment.

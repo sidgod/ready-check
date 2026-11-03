@@ -580,7 +580,7 @@ Users click the button → AWS Console opens with the template pre-loaded → th
 | `GitHubRepo` | Repository name | `ready-check` |
 | `GitHubBranch` | Branch that triggers deploy | `main` |
 | `ContainerPower` | Lightsail container size | `nano` |
-| `NotificationEmail` | Email for SES sender identity verification | — (required) |
+| `NotificationEmail` | Email to verify in SES for testing while in the SES sandbox | — (required) |
 | `AuthSecret` | JWT signing secret for facilitator tokens | Auto-generated via `AWS::SecretsManager` |
 
 **Resources provisioned:**
@@ -593,6 +593,8 @@ Resources:
 
   # --- Auth / Email ---
   SESEmailIdentity:
+    Type: AWS::SES::EmailIdentity             # Verifies NotificationEmail for sandbox testing
+  SESDomainIdentity:
     Type: AWS::SES::EmailIdentity             # Verifies sender domain for PIN emails
   SESDomainDKIM:
     Type: AWS::Route53::RecordSetGroup        # DKIM DNS records for SES
@@ -626,6 +628,7 @@ Outputs:
 
 **What the template does NOT provision:**
 - SES SMTP credentials (must be created manually in IAM — CloudFormation can't create these)
+- SES production access (must be requested manually — the sandbox only delivers to verified addresses)
 - GitHub repository secrets (user copies the output values into their repo settings)
 - The initial container deployment (first deploy happens when user pushes to main)
 
